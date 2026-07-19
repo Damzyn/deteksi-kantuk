@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Deteksi Kantuk Pengemudi</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚗 Deteksi Kantuk Pengemudi</h1>
+            <p class="subtitle">Pemantauan Real-time | AI Powered</p>
+        </header>
+
+        <!-- NAVIGASI TAB - HANYA 2 TAB -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="live">📹 Kamera Langsung</button>
+            <button class="tab-btn" data-tab="about">ℹ️ Tentang</button>
+        </div>
+
+        <!-- TAB 1: KAMERA LANGSUNG -->
+        <div id="liveTab" class="tab-content active">
+            <div class="main-content">
+                <div class="video-section">
+                    <div class="video-container">
+                        <video id="video" autoplay playsinline muted></video>
+                        <canvas id="canvas" style="display: none;"></canvas>
+                        <div class="video-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;">
+                            <div class="status-badge" style="position: absolute; top: 15px; left: 15px; display: inline-block; padding: 6px 14px; border-radius: 20px; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1);">
+                                <span class="status-text" id="statusText" style="font-weight: 600; font-size: 0.8rem; text-shadow: 0 2px 10px rgba(0,0,0,0.5);"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="controls">
+                        <button id="startBtn" class="btn btn-primary">▶ Mulai Kamera</button>
+                        <button id="stopBtn" class="btn btn-secondary" disabled>⏹ Hentikan Kamera</button>
+                        <button id="switchCameraBtn" class="btn btn-info" disabled>🔄 Ganti Kamera</button>
+                        <button id="fullscreenBtn" class="btn btn-fullscreen" disabled>⛶ Fullscreen</button>
+                        <button id="nightVisionBtn" class="btn btn-nightvision" disabled>🔊 Suara ON</button>
+                    </div>
+                    
+                    <div class="camera-info" id="cameraInfo" style="margin-top: 10px; text-align: center; font-size: 12px; color: #aaa;">
+                        📷 Kamera: Depan
+                    </div>
+                </div>
+
+                <div class="info-panel">
+                    <div class="status-panel">
+                        <h3>📋 Status Saat Ini</h3>
+                        <div class="status-indicator">
+                            <div class="status-circle" id="statusCircle"></div>
+                            <span id="statusMessage">Menunggu kamera...</span>
+                        </div>
+                        <div id="statusDescription" style="margin-top: 12px; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 10px; font-size: 0.85rem; line-height: 1.5; color: #ddd;">
+                            <!-- Deskripsi status akan muncul di sini -->
+                        </div>
+                    </div>
+
+                    <div class="metrics-panel">
+                        <h3>📊 Metrik Real-time</h3>
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-label">Kondisi Mata</div>
+                                <div class="metric-value" id="eyeState">---</div>
+                                <div class="metric-detail">EAR: <span id="earValue">0.00</span></div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">Kondisi Mulut</div>
+                                <div class="metric-value" id="mouthState">---</div>
+                                <div class="metric-detail">MAR: <span id="marValue">0.00</span></div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">Mata Tertutup</div>
+                                <div class="metric-value" id="eyeDuration">0.0d</div>
+                                <div class="metric-detail">/ 1.0d batas</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-label">Menguap</div>
+                                <div class="metric-value" id="yawnDuration">0.0d</div>
+                                <div class="metric-detail">/ 1.0d batas</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CNN PANEL - PREDIKSI AI -->
+                    <div class="cnn-panel">
+                        <h3>🤖 Prediksi AI (Model CNN)</h3>
+                        <div class="cnn-info">
+                            <span id="cnnPrediction">Menunggu wajah...</span>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" id="confidenceFill" style="width: 0%;"></div>
+                            </div>
+                            <span id="cnnConfidence">0% keyakinan</span>
+                        </div>
+                    </div>
+
+                    <div class="info-text">
+                        <h4>📋 Sistem Peringatan</h4>
+                        <ul>
+                            <li><span class="warning">🟠 PERINGATAN</span> - Menguap → peringatan.wav</li>
+                            <li><span class="danger">🔴 BAHAYA</span> - Mata tertutup → bahaya.wav</li>
+                            <li><span class="very-dangerous">💀 SANGAT BERBAHAYA</span> - Mata tertutup + Menguap → sangat_bahaya.wav</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: TENTANG -->
+        <div id="aboutTab" class="tab-content">
+            <div class="main-content">
+                <div class="video-section">
+                    <div class="about-container" style="padding: 20px;">
+                        <h2 style="color: #667eea; margin-bottom: 20px;">📋 Sistem Deteksi Kantuk Pengemudi</h2>
+                        
+                        <div class="about-card" style="background: rgba(0,0,0,0.5); border-radius: 15px; padding: 20px; margin-bottom: 20px;">
+                            <h3 style="color: #00ff00; margin-bottom: 15px;">🚗 Tentang Aplikasi</h3>
+                            <p style="line-height: 1.6; color: #ddd;">
+                                Sistem Deteksi Kantuk Pengemudi ini menggunakan teknologi <strong>Convolutional Neural Network (CNN)</strong> 
+                                dan <strong>MediaPipe FaceMesh</strong> untuk memantau kondisi pengemudi secara real-time.
+                                Sistem akan memberikan peringatan suara jika terdeteksi kantuk (mata tertutup) atau menguap.
+                            </p>
+                        </div>
+
+                        <div class="about-card" style="background: rgba(0,0,0,0.5); border-radius: 15px; padding: 20px; margin-bottom: 20px;">
+                            <h3 style="color: #ffa500; margin-bottom: 15px;">⚠️ Peringatan Penting</h3>
+                            <ul style="color: #ddd; line-height: 1.8; padding-left: 20px;">
+                                <li>🔴 <strong>WAJIB menggunakan kamera DEPAN</strong> jika menggunakan smartphone!</li>
+                                <li>🔴 Pastikan pencahayaan cukup untuk hasil deteksi maksimal</li>
+                                <li>🔴 <strong>Jangan gunakan kacamata hitam atau kacamata tebal</strong> (mengganggu deteksi mata)</li>
+                                <li>🔴 Posisikan wajah di tengah frame kamera</li>
+                                <li>🔴 Selalu prioritaskan keselamatan berkendara</li>
+                            </ul>
+                        </div>
+
+                        <div class="about-card" style="background: rgba(0,0,0,0.5); border-radius: 15px; padding: 20px; margin-bottom: 20px;">
+                            <h3 style="color: #00ff00; margin-bottom: 15px;">📱 Panduan Penggunaan</h3>
+                            <ul style="color: #ddd; line-height: 1.8; padding-left: 20px;">
+                                <li>1️⃣ Klik tombol <strong>"Mulai Kamera"</strong> untuk memulai deteksi</li>
+                                <li>2️⃣ Gunakan tombol <strong>"Ganti Kamera"</strong> untuk ganti kamera depan/belakang</li>
+                                <li>3️⃣ Sistem akan memperingatkan dengan suara jika kantuk terdeteksi</li>
+                            </ul>
+                        </div>
+
+                        <div class="about-card" style="background: rgba(0,0,0,0.5); border-radius: 15px; padding: 20px; margin-bottom: 20px;">
+                            <h3 style="color: #00ff00; margin-bottom: 15px;">🎯 Tips Deteksi Maksimal</h3>
+                            <ul style="color: #ddd; line-height: 1.8; padding-left: 20px;">
+                                <li>📷 Posisikan kamera <strong>sejajar dengan wajah</strong> (tidak terlalu rendah/tinggi)</li>
+                                <li>💡 Pastikan cahaya menyala dari <strong>arah depan wajah</strong></li>
+                                <li>👓 <strong>Lepaskan kacamata</strong> jika memungkinkan untuk deteksi mata lebih akurat</li>
+                                <li>📏 Jarak wajah ke kamera sekitar <strong>30-50 cm</strong></li>
+                                <li>😎 Hindari penggunaan kacamata hitam atau kacamata blokir cahaya</li>
+                            </ul>
+                        </div>
+
+                        <div class="about-card" style="background: rgba(0,0,0,0.5); border-radius: 15px; padding: 20px;">
+                            <h3 style="color: #ffa500; margin-bottom: 15px;">🔧 Teknologi yang Digunakan</h3>
+                            <ul style="color: #ddd; line-height: 1.8; padding-left: 20px;">
+                                <li>🧠 <strong>CNN (Convolutional Neural Network)</strong> - Mendeteksi kantuk dan menguap</li>
+                                <li>👁️ <strong>MediaPipe FaceMesh (468 titik)</strong> - Deteksi titik wajah</li>
+                                <li>📊 <strong>EAR (Eye Aspect Ratio)</strong> - Mengukur bukaan mata</li>
+                                <li>👄 <strong>MAR (Mouth Aspect Ratio)</strong> - Mengukur bukaan mulut</li>
+                                <li>🎵 <strong>Multi-level Audio Alert</strong> - Peringatan suara 3 level</li>
+                                <li>🔄 <strong>Real-time Processing</strong> - Deteksi langsung dari webcam</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-panel">
+                    <div class="status-panel">
+                        <h3>ℹ️ Informasi Aplikasi</h3>
+                        <div style="text-align: center; padding: 10px;">
+                            <p style="margin: 10px 0;">📱 <strong>Versi</strong> 2.0</p>
+                            <p style="margin: 10px 0;">👨‍💻 <strong>Pengembang</strong> Driver Safety System</p>
+                            <p style="margin: 10px 0;">📅 <strong>Rilis</strong> 2026</p>
+                            <p style="margin: 10px 0;">🎯 <strong>Platform</strong> Web-Based</p>
+                        </div>
+                    </div>
+
+                    <div class="metrics-panel">
+                        <h3>🎯 Fitur Utama</h3>
+                        <ul style="list-style: none; padding: 0;">
+                            <li style="padding: 8px 0;">✅ Deteksi Real-time (20-30 FPS)</li>
+                            <li style="padding: 8px 0;">✅ Multi-level Peringatan (3 level)</li>
+                            <li style="padding: 8px 0;">✅ Ganti Kamera (Depan/Belakang)</li>
+                            <li style="padding: 8px 0;">✅ AI CNN Model (SavedModel)</li>
+                            <li style="padding: 8px 0;">✅ 468 Titik Wajah (MediaPipe)</li>
+                            <li style="padding: 8px 0;">✅ Picture-in-Picture (PiP) - Deteksi berjalan di layar kecil yang bisa dipindahkan, memungkinkan pengemudi tetap menggunakan aplikasi lain sambil memantau kondisi kantuk.</li>
+                        </ul>
+                    </div>
+
+                    <div class="cnn-panel">
+                        <h3>📊 Level Peringatan</h3>
+                        <div class="cnn-info">
+                            <p style="color: #ffa500;">🟠 PERINGATAN - Menguap (peringatan.wav)</p>
+                            <p style="color: #ff0000;">🔴 BAHAYA - Mata Tertutup (bahaya.wav)</p>
+                            <p style="color: #8B0000;">💀 SANGAT BERBAHAYA - Keduanya (sangat_bahaya.wav)</p>
+                        </div>
+                        <div class="confidence-bar" style="margin-top: 10px;">
+                            <div class="confidence-fill" style="width: 100%; background: linear-gradient(90deg, #ffa500, #ff0000, #8B0000);"></div>
+                        </div>
+                        <p style="font-size: 0.7rem; color: #aaa; text-align: center; margin-top: 8px;">Prioritas: SANGAT BERBAHAYA - BAHAYA - PERINGATAN</p>
+                    </div>
+
+                    <div class="info-text">
+                        <h4>📞 Kontak & Dukungan</h4>
+                        <ul>
+                            <li>📧 Email: khalidalbani21.com</li>
+                            <li>🐛 Laporan Issue: github.com/khalidalbani21</li>
+                        </ul>
+                        <p class="note">⚠️ Gunakan aplikasi ini dengan bijak. Prioritaskan keselamatan berkendara!</p>
+                        <p class="note">🚗 Tetap aman, tetap terjaga! Jangan mengemudi dalam kondisi mengantuk.</p>
+                        <p class="note">💡 Istirahatlah setiap 2 jam perjalanan jauh.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Driver Safety System | MediaPipe 468 Landmarks | CNN | EAR/MAR | PiP</p>
+        </footer>
+    </div>
+
+    <audio id="warningSound" preload="auto" style="display: none;"></audio>
+    <audio id="dangerSound" preload="auto" style="display: none;"></audio>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+drowsiness_model.h5
+drowsiness_saved_model/
+*.wav
+*.mp3
+*.zip
+.DS_Store
+venv/
+env/
+.venv/
+*.log
+*.sqlite3
+*.db
+.vscode/
+.idea/

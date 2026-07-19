@@ -1,0 +1,4 @@
+https://www.kaggle.com/datasets/hoangtung719/drowsiness-dataset
+https://www.kaggle.com/datasets/tauilabdelilah/mrl-eye-dataset
+https://www.kaggle.com/datasets/harshilpatel2711/drowsiness2
+https://www.kaggle.com/datasets/talhabhatti7262/drivers-drowsiness-detection
