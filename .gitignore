@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 *.pyo
+drowsiness_model.h5
+drowsiness_saved_model/
 *.wav
 *.mp3
 *.zip
@@ -18,5 +20,3 @@ dist/
 build/
 *.so
 *.pyd
-*.wav
-drowsiness_model.h5

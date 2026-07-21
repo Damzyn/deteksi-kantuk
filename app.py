@@ -706,11 +706,31 @@ def internal_error(error):
 if __name__ == '__main__':
     import socket
     
-    # Cek apakah di environment Render
+    # Cek apakah di environment Railway atau Render
+    is_railway = os.environ.get('RAILWAY_ENVIRONMENT', '').lower() == 'production'
     is_render = os.environ.get('RENDER', 'false').lower() == 'true'
     
-    if is_render:
-        # Di Render, Gunicorn akan menjalankan app
+    if is_railway:
+        # Di Railway
+        port = int(os.environ.get('PORT', 5000))
+        print("\n" + "="*60)
+        print("🚀 RUNNING ON RAILWAY")
+        print("="*60)
+        print(f"📊 KONFIGURASI:")
+        print(f"   EAR_THRESHOLD: {EAR_THRESHOLD}")
+        print(f"   MAR_THRESHOLD: {MAR_THRESHOLD}")
+        print(f"   REQUIRED_DURATION: {REQUIRED_DURATION}s")
+        print(f"   WINDOW_SIZE: {WINDOW_SIZE}")
+        print(f"   TensorFlow: {'✅' if TF_AVAILABLE else '❌'}")
+        print(f"   CNN Loaded: {'✅' if CNN_LOADED else '❌'}")
+        print(f"   CNN Confidence Threshold: {CNN_CONF_THRESHOLD*100:.0f}%")
+        print("="*60)
+        print(f"✅ Server running on port {port}")
+        
+        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+        
+    elif is_render:
+        # Di Render
         print("\n" + "="*60)
         print("🚀 RUNNING ON RENDER")
         print("="*60)
@@ -721,7 +741,6 @@ if __name__ == '__main__':
         print(f"   WINDOW_SIZE: {WINDOW_SIZE}")
         print(f"   TensorFlow: {'✅' if TF_AVAILABLE else '❌'}")
         print(f"   CNN Loaded: {'✅' if CNN_LOADED else '❌'}")
-        print(f"   CNN Confidence Threshold: {CNN_CONF_THRESHOLD*100:.0f}%")
         print("="*60)
         print("✅ Server running on Render")
     else:
