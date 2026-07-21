@@ -2,12 +2,11 @@
 DRIVER DROWSINESS DETECTION - HYBRID
 Mata: EAR (Geometric)
 Mulut: CNN (SavedModel)
+DEPLOY READY - RENDER.COM
 """
 
 import os
-os.environ['MP_TASK_INIT'] = '1'
-os.environ['MP_LOG_LEVEL'] = 'ERROR'
-
+import sys
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -19,20 +18,39 @@ from collections import deque
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 
+# ==================================================
+# KONFIGURASI UNTUK RENDER
+# ==================================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
+STATIC_DIR = os.path.join(BASE_DIR, 'static')
+
+# Set environment untuk mengurangi log TensorFlow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+# ==================================================
+# IMPOR TENSORFLOW (dengan error handling)
+# ==================================================
 try:
     import tensorflow as tf
     TF_AVAILABLE = True
+    print("✅ TensorFlow loaded successfully")
 except Exception as e:
     TF_AVAILABLE = False
     print(f"⚠️ TensorFlow error: {e}")
 
 warnings.filterwarnings('ignore')
 
-app = Flask(__name__)
+# ==================================================
+# FLASK APP
+# ==================================================
+app = Flask(__name__, 
+            template_folder=TEMPLATE_DIR,
+            static_folder=STATIC_DIR)
 CORS(app)
 
 # ==================================================
-# KONFIGURASI
+# KONFIGURASI DETEKSI
 # ==================================================
 EAR_THRESHOLD = 0.29
 MAR_THRESHOLD = 0.65
@@ -63,7 +81,6 @@ face_mesh = mp_face_mesh.FaceMesh(
 # ==================================================
 # INDEKS LANDMARK
 # ==================================================
-
 LEFT_EYE_EAR_INDICES = [33, 133, 160, 159, 158, 144]
 RIGHT_EYE_EAR_INDICES = [362, 263, 387, 386, 385, 380]
 MOUTH_MAR_INDICES = [61, 291, 13, 14, 78, 308]
@@ -86,7 +103,7 @@ CNN_LOADED = False
 def load_cnn_model():
     global cnn_predict_fn, CNN_LOADED
     
-    saved_model_path = "drowsiness_saved_model"
+    saved_model_path = os.path.join(BASE_DIR, "drowsiness_saved_model")
     
     if os.path.exists(saved_model_path):
         try:
@@ -101,6 +118,7 @@ def load_cnn_model():
                 cnn_predict_fn = loaded.signatures[sig_key]
                 print(f"✅ Using '{sig_key}' signature")
             
+            # Test prediction
             dummy = np.random.rand(1, 128, 128, 3).astype(np.float32)
             tf_input = tf.constant(dummy, dtype=tf.float32)
             test_output = cnn_predict_fn(tf_input)
@@ -109,51 +127,24 @@ def load_cnn_model():
             return True
         except Exception as e:
             print(f"❌ Failed to load SavedModel: {e}")
+            CNN_LOADED = False
             return False
     else:
-        print(f"⚠️ SavedModel not found")
+        print(f"⚠️ SavedModel not found at {saved_model_path}")
+        CNN_LOADED = False
         return False
 
-def cnn_predict(roi):
-    global cnn_predict_fn
-    if cnn_predict_fn is None or roi is None or roi.size == 0:
-        return None, 0.0
-    
-    try:
-        resized = cv2.resize(roi, (128, 128))
-        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        normalized = rgb / 255.0
-        input_tensor = np.expand_dims(normalized, axis=0).astype(np.float32)
-        tf_input = tf.constant(input_tensor, dtype=tf.float32)
-        
-        result = cnn_predict_fn(tf_input)
-        
-        if isinstance(result, dict):
-            output = list(result.values())[0].numpy()
-        else:
-            output = result.numpy()
-        
-        if len(output.shape) > 1:
-            idx = np.argmax(output[0])
-            confidence = float(output[0][idx])
-        else:
-            idx = np.argmax(output)
-            confidence = float(output[idx])
-        
-        class_name = CLASS_NAMES[idx]
-        return class_name, confidence
-        
-    except Exception as e:
-        print(f"CNN predict error: {e}")
-        return None, 0.0
-
-CNN_LOADED = load_cnn_model()
+# Load CNN jika TensorFlow tersedia
+if TF_AVAILABLE:
+    CNN_LOADED = load_cnn_model()
+else:
+    print("⚠️ TensorFlow not available, CNN disabled")
 
 if CNN_LOADED:
     print("✅ CNN Model READY! (HANYA UNTUK MULUT)")
     print(f"   CNN Confidence Threshold: {CNN_CONF_THRESHOLD*100:.0f}%")
 else:
-    print("⚠️ CNN Model NOT LOADED")
+    print("⚠️ CNN Model NOT LOADED - Using MAR only")
 
 print("="*60)
 print("SERVER SIAP!")
@@ -250,6 +241,40 @@ def get_mouth_roi(frame, landmarks, mouth_indices):
     
     roi = frame[y_min:y_max, x_min:x_max]
     return roi
+
+def cnn_predict(roi):
+    """Fungsi untuk prediksi CNN"""
+    global cnn_predict_fn
+    if cnn_predict_fn is None or roi is None or roi.size == 0:
+        return None, 0.0
+    
+    try:
+        resized = cv2.resize(roi, (128, 128))
+        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        normalized = rgb / 255.0
+        input_tensor = np.expand_dims(normalized, axis=0).astype(np.float32)
+        tf_input = tf.constant(input_tensor, dtype=tf.float32)
+        
+        result = cnn_predict_fn(tf_input)
+        
+        if isinstance(result, dict):
+            output = list(result.values())[0].numpy()
+        else:
+            output = result.numpy()
+        
+        if len(output.shape) > 1:
+            idx = np.argmax(output[0])
+            confidence = float(output[0][idx])
+        else:
+            idx = np.argmax(output)
+            confidence = float(output[idx])
+        
+        class_name = CLASS_NAMES[idx]
+        return class_name, confidence
+        
+    except Exception as e:
+        print(f"CNN predict error: {e}")
+        return None, 0.0
 
 def draw_alert_on_frame(frame, result):
     """Gambar hanya 'Wajah tidak terdeteksi' di frame - TANPA ALERT"""
@@ -373,6 +398,7 @@ class DrowsinessDetector:
                     
                     yawning = mar_smooth > MAR_THRESHOLD
                     
+                    # CNN Prediction untuk mulut (jika tersedia)
                     if CNN_LOADED and landmarks is not None:
                         try:
                             mouth_roi = get_mouth_roi(frame, landmarks, MOUTH_MAR_INDICES)
@@ -383,6 +409,7 @@ class DrowsinessDetector:
                                     cnn_mouth_pred = pred_mouth
                                     cnn_mouth_conf = conf_mouth
                             
+                            # Gunakan CNN jika confidence tinggi
                             if cnn_mouth_pred == 'Yawn' and cnn_mouth_conf > CNN_CONF_THRESHOLD:
                                 yawning = True
                             elif cnn_mouth_pred == 'No_yawn' and cnn_mouth_conf > CNN_CONF_THRESHOLD:
@@ -393,9 +420,10 @@ class DrowsinessDetector:
                         except Exception as e:
                             print(f"CNN error: {e}")
                     
-                    print(f"🔍 EAR: {ear:.3f} | MAR: {mar:.3f}")
-                    print(f"   → Mata: {'TUTUP' if eye_closed else 'BUKA'} | Mulut: {'MENGUAP' if yawning else 'NORMAL'}")
-                    print("-" * 40)
+                    # Debug output (akan muncul di log Render)
+                    if np.random.random() < 0.01:  # Hanya 1% frame untuk mengurangi log
+                        print(f"🔍 EAR: {ear:.3f} | MAR: {mar:.3f}")
+                        print(f"   → Mata: {'TUTUP' if eye_closed else 'BUKA'} | Mulut: {'MENGUAP' if yawning else 'NORMAL'}")
             
             # ========== HITUNG DURASI ==========
             if eye_closed:
@@ -516,6 +544,9 @@ class DrowsinessDetector:
     def stop(self):
         self.running = False
 
+# ==================================================
+# INISIALISASI DETECTOR
+# ==================================================
 detector_instance = DrowsinessDetector()
 
 # ==================================================
@@ -528,7 +559,12 @@ def index():
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    return send_from_directory('static', filename)
+    """Serve static files seperti CSS, JS, dan audio"""
+    try:
+        return send_from_directory('static', filename)
+    except Exception as e:
+        print(f"Error serving static file {filename}: {e}")
+        return jsonify({'error': 'File not found'}), 404
 
 @app.route('/process_frame', methods=['POST'])
 def process_frame():
@@ -544,8 +580,6 @@ def process_frame():
         
         facing_mode = data.get('facing_mode', 'user')
         pip_mode = data.get('pip_mode', False)
-        
-        print(f"📱 DEBUG - pip_mode: {pip_mode}, facing_mode: {facing_mode}")
         
         if facing_mode == 'user':
             frame = cv2.flip(frame, 1)
@@ -629,11 +663,13 @@ def reset():
 
 @app.route('/health', methods=['GET'])
 def health():
+    """Health check endpoint untuk Render"""
     return jsonify({
         'status': 'ok',
         'mode': 'Hybrid (EAR untuk Mata, CNN untuk Mulut)',
         'cnn_loaded': CNN_LOADED,
         'cnn_conf_threshold': CNN_CONF_THRESHOLD,
+        'tensorflow_available': TF_AVAILABLE,
         'config': {
             'EAR_THRESHOLD': EAR_THRESHOLD,
             'MAR_THRESHOLD': MAR_THRESHOLD,
@@ -651,22 +687,63 @@ def pip_status():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ==================================================
+# ERROR HANDLERS
+# ==================================================
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal server error'}), 500
+
+# ==================================================
+# MAIN
+# ==================================================
+
 if __name__ == '__main__':
     import socket
-    hostname = socket.gethostname()
-    local_ip = socket.gethostbyname(hostname)
-    print("\n" + "="*60)
-    print("🌐 AKSES URL:")
-    print("="*60)
-    print(f"📍 Local access:    http://localhost:5000")
-    print(f"📍 Local network:   http://{local_ip}:5000")
-    print("="*60)
-    print(f"\n📊 KONFIGURASI:")
-    print(f"   EAR_THRESHOLD: {EAR_THRESHOLD}")
-    print(f"   MAR_THRESHOLD: {MAR_THRESHOLD}")
-    print(f"   REQUIRED_DURATION: {REQUIRED_DURATION}s")
-    print(f"   WINDOW_SIZE: {WINDOW_SIZE}")
-    print(f"   CNN Loaded: {CNN_LOADED}")
-    print(f"   CNN Confidence Threshold: {CNN_CONF_THRESHOLD*100:.0f}%")
-    print("="*60)
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    
+    # Cek apakah di environment Render
+    is_render = os.environ.get('RENDER', 'false').lower() == 'true'
+    
+    if is_render:
+        # Di Render, Gunicorn akan menjalankan app
+        print("\n" + "="*60)
+        print("🚀 RUNNING ON RENDER")
+        print("="*60)
+        print(f"📊 KONFIGURASI:")
+        print(f"   EAR_THRESHOLD: {EAR_THRESHOLD}")
+        print(f"   MAR_THRESHOLD: {MAR_THRESHOLD}")
+        print(f"   REQUIRED_DURATION: {REQUIRED_DURATION}s")
+        print(f"   WINDOW_SIZE: {WINDOW_SIZE}")
+        print(f"   TensorFlow: {'✅' if TF_AVAILABLE else '❌'}")
+        print(f"   CNN Loaded: {'✅' if CNN_LOADED else '❌'}")
+        print(f"   CNN Confidence Threshold: {CNN_CONF_THRESHOLD*100:.0f}%")
+        print("="*60)
+        print("✅ Server running on Render")
+    else:
+        # Local development
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        port = int(os.environ.get('PORT', 5000))
+        
+        print("\n" + "="*60)
+        print("🌐 AKSES URL:")
+        print("="*60)
+        print(f"📍 Local access:    http://localhost:{port}")
+        print(f"📍 Local network:   http://{local_ip}:{port}")
+        print("="*60)
+        print(f"\n📊 KONFIGURASI:")
+        print(f"   EAR_THRESHOLD: {EAR_THRESHOLD}")
+        print(f"   MAR_THRESHOLD: {MAR_THRESHOLD}")
+        print(f"   REQUIRED_DURATION: {REQUIRED_DURATION}s")
+        print(f"   WINDOW_SIZE: {WINDOW_SIZE}")
+        print(f"   TensorFlow: {'✅' if TF_AVAILABLE else '❌'}")
+        print(f"   CNN Loaded: {'✅' if CNN_LOADED else '❌'}")
+        print(f"   CNN Confidence Threshold: {CNN_CONF_THRESHOLD*100:.0f}%")
+        print("="*60)
+        
+        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
